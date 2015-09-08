@@ -102,10 +102,21 @@ typedef LARGE_INTEGER cgtimer_t;
 typedef struct timespec cgtimer_t;
 #endif
 
+void *_cgmalloc(size_t size, const char *file, const char *func, const int line);
+void *_cgcalloc(const size_t memb, size_t size, const char *file, const char *func, const int line);
+void *_cgrealloc(void *ptr, size_t size, const char *file, const char *func, const int line);
+#define cgmalloc(_size) _cgmalloc(_size, __FILE__, __func__, __LINE__)
+#define cgcalloc(_memb, _size) _cgcalloc(_memb, _size, __FILE__, __func__, __LINE__)
+#define cgrealloc(_ptr, _size) _cgrealloc(_ptr, _size, __FILE__, __func__, __LINE__)
+
 struct thr_info;
 struct pool;
 enum dev_reason;
 struct cgpu_info;
+void b58tobin(unsigned char *b58bin, const char *b58);
+void address_to_pubkeyhash(unsigned char *pkh, const char *addr);
+int ser_number(unsigned char *s, int32_t val);
+unsigned char *ser_string(char *s, int *slen);
 int thr_info_create(struct thr_info *thr, pthread_attr_t *attr, void *(*start) (void *), void *arg);
 void thr_info_cancel_join(struct thr_info *thr);
 void cgtime(struct timeval *tv);
@@ -151,17 +162,12 @@ int _cgsem_mswait(cgsem_t *cgsem, int ms, const char *file, const char *func, co
 void cgsem_reset(cgsem_t *cgsem);
 void cgsem_destroy(cgsem_t *cgsem);
 bool cg_completion_timeout(void *fn, void *fnarg, int timeout);
+void _cg_memcpy(void *dest, const void *src, unsigned int n, const char *file, const char *func, const int line);
 
 #define cgsem_init(_sem) _cgsem_init(_sem, __FILE__, __func__, __LINE__)
 #define cgsem_post(_sem) _cgsem_post(_sem, __FILE__, __func__, __LINE__)
 #define cgsem_wait(_sem) _cgsem_wait(_sem, __FILE__, __func__, __LINE__)
 #define cgsem_mswait(_sem, _timeout) _cgsem_mswait(_sem, _timeout, __FILE__, __func__, __LINE__)
-
-/* Align a size_t to 4 byte boundaries for fussy arches */
-static inline void align_len(size_t *len)
-{
-  if (*len % 4)
-    *len += 4 - (*len % 4);
-}
+#define cg_memcpy(dest, src, n) _cg_memcpy(dest, src, n, __FILE__, __func__, __LINE__)
 
 #endif /* UTIL_H */

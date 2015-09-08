@@ -806,6 +806,7 @@ extern void api_initlock(void *lock, enum cglock_typ typ, const char *file, cons
 #define cglock_init(_lock) _cglock_init(_lock, __FILE__, __func__, __LINE__)
 #define cg_rlock(_lock) _cg_rlock(_lock, __FILE__, __func__, __LINE__)
 #define cg_ilock(_lock) _cg_ilock(_lock, __FILE__, __func__, __LINE__)
+#define cg_uilock(_lock) _cg_uilock(_lock, __FILE__, __func__, __LINE__)
 #define cg_ulock(_lock) _cg_ulock(_lock, __FILE__, __func__, __LINE__)
 #define cg_wlock(_lock) _cg_wlock(_lock, __FILE__, __func__, __LINE__)
 #define cg_dwlock(_lock) _cg_dwlock(_lock, __FILE__, __func__, __LINE__)
@@ -948,6 +949,12 @@ static inline void _cg_rlock(cglock_t *lock, const char *file, const char *func,
 static inline void _cg_ilock(cglock_t *lock, const char *file, const char *func, const int line)
 {
   _mutex_lock(&lock->mutex, file, func, line);
+}
+
+/* Unlock intermediate variant without changing to read or write version */
+static inline void _cg_uilock(cglock_t *lock, const char *file, const char *func, const int line)
+{
+  _mutex_unlock(&lock->mutex, file, func, line);
 }
 
 /* Upgrade intermediate variant to a write lock */
@@ -1336,7 +1343,8 @@ struct pool {
   time_t last_share_time;
   double last_share_diff;
   double best_diff;
-
+  uint64_t bad_work;
+  
   struct sgminer_stats sgminer_stats;
   struct sgminer_pool_stats sgminer_pool_stats;
 
@@ -1373,6 +1381,7 @@ struct pool {
 
   /* GBT variables */
   bool has_gbt;
+  bool gbt_solo;
   cglock_t gbt_lock;
   unsigned char previousblockhash[32];
   unsigned char gbt_target[32];
@@ -1383,16 +1392,31 @@ struct pool {
   uint32_t gbt_version;
   uint32_t curtime;
   uint32_t gbt_bits;
+  int transactions;
+  unsigned char merklebin[16 * 32];
+  char *txn_data;
+  unsigned char scriptsig_base[100];
+  unsigned char script_pubkey[25 + 3];
   unsigned char *txn_hashes;
   size_t gbt_txns;
   size_t coinbase_len;
+  CURL *gbt_curl;
+  int nValue;
+  bool gbt_curl_inuse;
+  int height;
 
   /* Shared by both stratum & GBT */
   unsigned char *coinbase;
+  char prev_hash[68];
   size_t nonce2_offset;
   unsigned char header_bin[128];
   double next_diff;
   int merkle_offset;
+  int merkles;
+  char bbversion[12];
+  char nbit[12];
+  char ntime[12];
+  double sdiff;
 
   struct timeval tv_lastwork;
 };
@@ -1403,6 +1427,7 @@ struct pool {
 #define GETWORK_MODE_BENCHMARK 'B'
 #define GETWORK_MODE_STRATUM 'S'
 #define GETWORK_MODE_GBT 'G'
+#define GETWORK_MODE_SOLO 'C'
 
 struct work {
   unsigned char data[128];
@@ -1416,7 +1441,8 @@ struct work {
 
   int   rolls;
   int   drv_rolllimit; /* How much the driver can roll ntime */
-
+  uint32_t nonce;
+  
   dev_blk_ctx blk;
 
   struct thr_info *thr;

@@ -5,6 +5,7 @@ minerd.exe
 *.o
 *.lo
 *.bin
+*groestlcoin.cl
 
 autom4te.cache
 .deps

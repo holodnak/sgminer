@@ -83,6 +83,46 @@ static void keep_sockalive(SOCKETTYPE fd)
 
 }
 
+/* Align a size_t to 4 byte boundaries for fussy arches */
+void align_len(size_t *len)
+{
+	if (*len % 4)
+		*len += 4 - (*len % 4);
+}
+
+void *_cgmalloc(size_t size, const char *file, const char *func, const int line)
+{
+	void *ret;
+
+	align_len(&size);
+	ret = malloc(size);
+	if (unlikely(!ret))
+		quit(1, "Failed to malloc size %d from %s %s:%d", (int)size, file, func, line);
+	return ret;
+}
+
+void *_cgcalloc(const size_t memb, size_t size, const char *file, const char *func, const int line)
+{
+	void *ret;
+
+	align_len(&size);
+	ret = calloc(memb, size);
+	if (unlikely(!ret))
+		quit(1, "Failed to calloc memb %d size %d from %s %s:%d", (int)memb, (int)size, file, func, line);
+	return ret;
+}
+
+void *_cgrealloc(void *ptr, size_t size, const char *file, const char *func, const int line)
+{
+	void *ret;
+
+	align_len(&size);
+	ret = realloc(ptr, size);
+	if (unlikely(!ret))
+		quit(1, "Failed to realloc size %d from %s %s:%d", (int)size, file, func, line);
+	return ret;
+}
+
 struct tq_ent {
   void      *data;
   struct list_head  q_node;
@@ -666,6 +706,158 @@ bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
   if (likely(len == 0 && *hexstr == 0))
     ret = true;
   return ret;
+}
+
+static bool _valid_hex(char *s, const char *file, const char *func, const int line)
+{
+	bool ret = false;
+	int i, len;
+
+	if (unlikely(!s)) {
+		applog(LOG_ERR, "Null string passed to valid_hex from"IN_FMT_FFL, file, func, line);
+		return ret;
+	}
+	len = strlen(s);
+	for (i = 0; i < len; i++) {
+		unsigned char idx = s[i];
+
+		if (unlikely(hex2bin_tbl[idx] < 0)) {
+			applog(LOG_ERR, "Invalid char 0x%x passed to valid_hex from"IN_FMT_FFL, idx, file, func, line);
+			return ret;
+		}
+	}
+	ret = true;
+	return ret;
+}
+
+#define valid_hex(s) _valid_hex(s, __FILE__, __func__, __LINE__)
+
+static bool _valid_ascii(char *s, const char *file, const char *func, const int line)
+{
+	bool ret = false;
+	int i, len;
+
+	if (unlikely(!s)) {
+		applog(LOG_ERR, "Null string passed to valid_ascii from"IN_FMT_FFL, file, func, line);
+		return ret;
+	}
+	len = strlen(s);
+	if (unlikely(!len)) {
+		applog(LOG_ERR, "Zero length string passed to valid_ascii from"IN_FMT_FFL, file, func, line);
+		return ret;
+	}
+	for (i = 0; i < len; i++) {
+		unsigned char idx = s[i];
+
+		if (unlikely(idx < 32 || idx > 126)) {
+			applog(LOG_ERR, "Invalid char 0x%x passed to valid_ascii from"IN_FMT_FFL, idx, file, func, line);
+			return ret;
+		}
+	}
+	ret = true;
+	return ret;
+}
+
+#define valid_ascii(s) _valid_ascii(s, __FILE__, __func__, __LINE__)
+
+static const int b58tobin_tbl[] = {
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
+	-1,  0,  1,  2,  3,  4,  5,  6,  7,  8, -1, -1, -1, -1, -1, -1,
+	-1,  9, 10, 11, 12, 13, 14, 15, 16, -1, 17, 18, 19, 20, 21, -1,
+	22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, -1, -1, -1, -1, -1,
+	-1, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, -1, 44, 45, 46,
+	47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57
+};
+
+/* b58bin should always be at least 25 bytes long and already checked to be
+ * valid. */
+void b58tobin(unsigned char *b58bin, const char *b58)
+{
+	uint32_t c, bin32[7];
+	int len, i, j;
+	uint64_t t;
+
+	memset(bin32, 0, 7 * sizeof(uint32_t));
+	len = strlen(b58);
+	for (i = 0; i < len; i++) {
+		c = b58[i];
+		c = b58tobin_tbl[c];
+		for (j = 6; j >= 0; j--) {
+			t = ((uint64_t)bin32[j]) * 58 + c;
+			c = (t & 0x3f00000000ull) >> 32;
+			bin32[j] = t & 0xffffffffull;
+		}
+	}
+	*(b58bin++) = bin32[0] & 0xff;
+	for (i = 1; i < 7; i++) {
+		*((uint32_t *)b58bin) = htobe32(bin32[i]);
+		b58bin += sizeof(uint32_t);
+	}
+}
+
+void address_to_pubkeyhash(unsigned char *pkh, const char *addr)
+{
+	unsigned char b58bin[25];
+
+	memset(b58bin, 0, 25);
+	b58tobin(b58bin, addr);
+	pkh[0] = 0x76;
+	pkh[1] = 0xa9;
+	pkh[2] = 0x14;
+	cg_memcpy(&pkh[3], &b58bin[1], 20);
+	pkh[23] = 0x88;
+	pkh[24] = 0xac;
+}
+
+/*  For encoding nHeight into coinbase, return how many bytes were used */
+int ser_number(unsigned char *s, int32_t val)
+{
+	int32_t *i32 = (int32_t *)&s[1];
+	int len;
+
+	if (val < 128)
+		len = 1;
+	else if (val < 16512)
+		len = 2;
+	else if (val < 2113664)
+		len = 3;
+	else
+		len = 4;
+	*i32 = htole32(val);
+	s[0] = len++;
+	return len;
+}
+
+/* For encoding variable length strings */
+unsigned char *ser_string(char *s, int *slen)
+{
+	size_t len = strlen(s);
+	unsigned char *ret;
+
+	ret = cgmalloc(1 + len + 8); // Leave room for largest size
+	if (len < 253) {
+		ret[0] = len;
+		cg_memcpy(ret + 1, s, len);
+		*slen = len + 1;
+	} else if (len < 0x10000) {
+		uint16_t *u16 = (uint16_t *)&ret[1];
+
+		ret[0] = 253;
+		*u16 = htobe16(len);
+		cg_memcpy(ret + 3, s, len);
+		*slen = len + 3;
+	} else {
+		/* size_t is only 32 bit on many platforms anyway */
+		uint32_t *u32 = (uint32_t *)&ret[1];
+
+		ret[0] = 254;
+		*u32 = htobe32(len);
+		cg_memcpy(ret + 5, s, len);
+		*slen = len + 5;
+	}
+	return ret;
 }
 
 bool fulltest(const unsigned char *hash, const unsigned char *target)
@@ -2901,4 +3093,25 @@ bool cg_completion_timeout(void *fn, void *fnarg, int timeout)
   pthread_join(pthread, NULL);
   free(cgc);
   return !ret;
+}
+
+
+void _cg_memcpy(void *dest, const void *src, unsigned int n, const char *file, const char *func, const int line)
+{
+	if (unlikely(n < 1 || n > (1ul << 31))) {
+		applog(LOG_ERR, "ERR: Asked to memcpy %u bytes from %s %s():%d",
+		       n, file, func, line);
+		return;
+	}
+	if (unlikely(!dest)) {
+		applog(LOG_ERR, "ERR: Asked to memcpy %u bytes to NULL from %s %s():%d",
+		       n, file, func, line);
+		return;
+	}
+	if (unlikely(!src)) {
+		applog(LOG_ERR, "ERR: Asked to memcpy %u bytes from NULL from %s %s():%d",
+		       n, file, func, line);
+		return;
+	}
+	memcpy(dest, src, n);
 }
