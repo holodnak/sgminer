@@ -830,6 +830,8 @@ int ser_number(unsigned char *s, int32_t val)
 	return len;
 }
 
+#define htobe16(x)		(((x) >> 8) | ((x) << 8))
+
 /* For encoding variable length strings */
 unsigned char *ser_string(char *s, int *slen)
 {
