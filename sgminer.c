@@ -2555,7 +2555,7 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 		}
 		pool->scriptsig_base[ofs++] = len;
 		cg_memcpy(pool->scriptsig_base + ofs, opt_grs_sig, len);
-		ofs += len;
+		ofs += len - 1;
 	}
 
 	pool->scriptsig_base[0] = ofs++; // Template length
@@ -2589,6 +2589,7 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 		 pool->nbit,
 		 "00000000", /* nonce */
 		 workpadding);
+		 header[224] = 0x00;
 	if (unlikely(!hex2bin(pool->header_bin, header, 112)))
 		quit(1, "Failed to hex2bin header in gbt_solo_decode");
 
