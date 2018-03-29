@@ -46,3 +46,8 @@ lib/warn-on-use.h
 mkinstalldirs
 
 *.swp
+
+test/
+m4/
+ltmain.sh
+winbuild/.vs/

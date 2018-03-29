@@ -2330,7 +2330,7 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 	pool->merkles = 0;
 	pool->transactions = json_array_size(transaction_arr);
 	binlen = pool->transactions * 32 + 32;
-	hashbin = alloca(binlen + 32);
+	hashbin = (unsigned char *)alloca(binlen + 32);
 	memset(hashbin, 0, 32);
 	binleft = binlen / 32;
 	if (pool->transactions) {
@@ -2348,7 +2348,7 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 			len += strlen(txn);
 		}
 
-		pool->txn_data = cgmalloc(len + 1);
+		pool->txn_data = (char *)cgmalloc(len + 1);
 		pool->txn_data[len] = '\0';
 
 		for (i = 0; i < pool->transactions; i++) {
@@ -2366,7 +2366,7 @@ static void gbt_merkle_bins(struct pool *pool, json_t *transaction_arr)
 				int txn_len;
 
 				txn_len = len / 2;
-				txn_bin = cgmalloc(txn_len);
+				txn_bin = (unsigned char *)cgmalloc(txn_len);
 				hex2bin(txn_bin, txn, txn_len);
 				/* This is needed for pooled mining since only
 				 * transaction data and not hashes are sent */
@@ -2569,7 +2569,7 @@ static bool gbt_solo_decode(struct pool *pool, json_t *res_val)
 		+ 1 + 25 // txout
 		+ 4; // lock
 	free(pool->coinbase);
-	pool->coinbase = cgcalloc(len, 1);
+	pool->coinbase = (unsigned char *)cgcalloc(len, 1);
 	cg_memcpy(pool->coinbase + 41, pool->scriptsig_base, ofs);
 	cg_memcpy(pool->coinbase + 41 + ofs, "\xff\xff\xff\xff", 4);
 	pool->coinbase[41 + ofs + 4] = 1;
@@ -5410,7 +5410,7 @@ static void hashmeter(int thr_id, struct timeval *diff,
     double thread_rolling = 0.0;
     int i;
 
-    applog(LOG_DEBUG, "[thread %d: %"PRIu64" hashes, %.1f khash/sec]",
+    applog(LOG_DEBUG, "[thread %d: %" PRIu64 " hashes, %.1f khash/sec]",
       thr_id, hashes_done, hashes_done / 1000 / secs);
 
     /* Rolling average for each thread and each device */
@@ -6545,7 +6545,7 @@ static void gen_stratum_work(struct pool *pool, struct work *work)
     merkle_hash = bin2hex((const unsigned char *)merkle_root, 32);
     applog(LOG_DEBUG, "[THR%d] Generated stratum merkle %s", work->thr_id, merkle_hash);
     applog(LOG_DEBUG, "[THR%d] Generated stratum header %s", work->thr_id, header);
-    applog(LOG_DEBUG, "[THR%d] Work job_id %s nonce2 %"PRIu64" ntime %s", work->thr_id, work->job_id,
+    applog(LOG_DEBUG, "[THR%d] Work job_id %s nonce2 %" PRIu64 " ntime %s", work->thr_id, work->job_id,
            work->nonce2, work->ntime);
     free(header);
     free(merkle_hash);
@@ -6697,7 +6697,7 @@ static void gen_solo_work(struct pool *pool, struct work *work)
 		merkle_hash = bin2hex((const unsigned char *)merkle_root, 32);
 		applog(LOG_DEBUG, "Generated GBT solo merkle %s", merkle_hash);
 		applog(LOG_DEBUG, "Generated GBT solo header %s", header);
-		applog(LOG_DEBUG, "Work nonce2 %"PRIu64" ntime %s", work->nonce2,
+		applog(LOG_DEBUG, "Work nonce2 %" PRIu64 " ntime %s", work->nonce2,
 		       work->ntime);
 		free(header);
 		free(merkle_hash);

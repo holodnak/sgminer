@@ -44,6 +44,7 @@
 #include "compat.h"
 #include "util.h"
 #include "pool.h"
+#include "logging.h"
 
 #define DEFAULT_SOCKWAIT 60
 extern double opt_diff_mult;
@@ -708,13 +709,15 @@ bool hex2bin(unsigned char *p, const char *hexstr, size_t len)
   return ret;
 }
 
+#include "logging.h"
+
 static bool _valid_hex(char *s, const char *file, const char *func, const int line)
 {
 	bool ret = false;
 	int i, len;
 
 	if (unlikely(!s)) {
-		applog(LOG_ERR, "Null string passed to valid_hex from"IN_FMT_FFL, file, func, line);
+		applog(LOG_ERR, "Null string passed to valid_hex from" IN_FMT_FFL, file, func, line);
 		return ret;
 	}
 	len = strlen(s);
@@ -722,7 +725,7 @@ static bool _valid_hex(char *s, const char *file, const char *func, const int li
 		unsigned char idx = s[i];
 
 		if (unlikely(hex2bin_tbl[idx] < 0)) {
-			applog(LOG_ERR, "Invalid char 0x%x passed to valid_hex from"IN_FMT_FFL, idx, file, func, line);
+			applog(LOG_ERR, "Invalid char 0x%x passed to valid_hex from" IN_FMT_FFL, idx, file, func, line);
 			return ret;
 		}
 	}
@@ -738,19 +741,19 @@ static bool _valid_ascii(char *s, const char *file, const char *func, const int 
 	int i, len;
 
 	if (unlikely(!s)) {
-		applog(LOG_ERR, "Null string passed to valid_ascii from"IN_FMT_FFL, file, func, line);
+		applog(LOG_ERR, "Null string passed to valid_ascii from" IN_FMT_FFL, file, func, line);
 		return ret;
 	}
 	len = strlen(s);
 	if (unlikely(!len)) {
-		applog(LOG_ERR, "Zero length string passed to valid_ascii from"IN_FMT_FFL, file, func, line);
+		applog(LOG_ERR, "Zero length string passed to valid_ascii from" IN_FMT_FFL, file, func, line);
 		return ret;
 	}
 	for (i = 0; i < len; i++) {
 		unsigned char idx = s[i];
 
 		if (unlikely(idx < 32 || idx > 126)) {
-			applog(LOG_ERR, "Invalid char 0x%x passed to valid_ascii from"IN_FMT_FFL, idx, file, func, line);
+			applog(LOG_ERR, "Invalid char 0x%x passed to valid_ascii from" IN_FMT_FFL, idx, file, func, line);
 			return ret;
 		}
 	}
@@ -838,7 +841,7 @@ unsigned char *ser_string(char *s, int *slen)
 	size_t len = strlen(s);
 	unsigned char *ret;
 
-	ret = cgmalloc(1 + len + 8); // Leave room for largest size
+	ret = (unsigned char *)cgmalloc(1 + len + 8); // Leave room for largest size
 	if (len < 253) {
 		ret[0] = len;
 		cg_memcpy(ret + 1, s, len);
@@ -1978,7 +1981,7 @@ static bool send_version(struct pool *pool, json_t *val)
   if (!id)
     return false;
 
-  sprintf(s, "{\"id\": %d, \"result\": \""PACKAGE"/"VERSION"\", \"error\": null}", id);
+  sprintf(s, "{\"id\": %d, \"result\": \"" PACKAGE "/" VERSION "\", \"error\": null}", id);
   if (!stratum_send(pool, s, strlen(s)))
     return false;
 
@@ -2667,9 +2670,9 @@ resend:
     sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": []}", swork_id++);
   } else {
     if (pool->sessionid)
-      sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\", \"%s\"]}", swork_id++, pool->sessionid);
+      sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"" PACKAGE "/" VERSION "\", \"%s\"]}", swork_id++, pool->sessionid);
     else
-      sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\""PACKAGE"/"VERSION"\"]}", swork_id++);
+      sprintf(s, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"" PACKAGE "/" VERSION "\"]}", swork_id++);
   }
 
   if (__stratum_send(pool, s, strlen(s)) != SEND_OK) {
